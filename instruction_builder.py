@@ -1,17 +1,12 @@
 class MCPInstructionBuilder:
     @staticmethod
-    def build(semantics: dict) -> dict:
-        instr = {
-            "axis": semantics.get("axis", "Y"),
-            "features": semantics.get("features", ["RMS", "Kurtosis"]),
-            "processing": {}
-        }
-        if "low_freq" in semantics and "high_freq" in semantics:
-            instr["processing"] = {
-                "method": "bandpass_filter",
-                "params": {
-                    "low": semantics["low_freq"],
-                    "high": semantics["high_freq"]
-                }
+    def build(semantics_list: list) -> list:
+        instrs = []
+        for semantics in semantics_list:
+            instr = {
+                "axis": semantics.get("axis", "Z"),
+                "features": semantics.get("features", ["RMS", "Skewness", "Kurtosis", "CrestFactor", "Estimated Speed"]),
+                "processing": semantics.get("processing", {})
             }
-        return instr
+            instrs.append(instr)
+        return instrs

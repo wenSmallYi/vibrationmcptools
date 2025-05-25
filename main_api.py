@@ -1,35 +1,45 @@
 from fastapi import FastAPI, UploadFile, File, Form
-from vibration_analyze_tool import Tools
-from semantic_agent import SemanticAgent
-from instruction_builder import MCPInstructionBuilder
-from vibration_llm_agent import AIAgent
+from vibration_mcp_llm.vibration_analyze_tool import Tools
+from vibration_mcp_llm.vibration_llm_agent import AIAgent
+from vibration_mcp_llm.semantic_agent import SemanticAgent
 import shutil, os, tempfile
 
 app = FastAPI()
-semantic_agent = SemanticAgent()
 agent = AIAgent()
+semantic_agent = SemanticAgent()
 
 @app.post("/analyze_vibration/")
 async def analyze(file: UploadFile = File(...), instruction_text: str = Form("")):
+    # 儲存上傳檔案到暫存
     with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
         shutil.copyfileobj(file.file, tmp)
         temp_path = tmp.name
 
     try:
+        # 由語意代理人抽取指令（支援單一或多組）
         semantics = semantic_agent.extract_semantics(instruction_text)
-        final_instr = MCPInstructionBuilder.build(semantics)
+        print("🧠 LLM 指令解析：", semantics)
 
-        print("🧠 使用者輸入指令：", instruction_text)
-        print("🔎 語意抽取結果：", semantics)
-        print("⚙️ 最終執行指令：", final_instr)
+        # 確保 semantics 一定是 list 格式
+        if isinstance(semantics, dict):
+            semantics_list = [semantics]
+        elif isinstance(semantics, list):
+            semantics_list = semantics
+        else:
+            semantics_list = []
 
-        features = Tools.analyze_with_instruction(temp_path, fs=10240, instruction=final_instr)
-        summary = agent.generate_summary(features)
+        fs = 10240  # 預設取樣率
+
+        # 一次批次執行所有指令組
+        all_results = Tools.analyze_with_instructions(temp_path, fs, semantics_list)
+
+        summary = agent.generate_summary(all_results)
+
     finally:
         os.remove(temp_path)
 
     return {
-        "instruction": final_instr,
-        "features": features,
+        "instructions": semantics_list,
+        "results": all_results,
         "llm_summary": summary
     }
